@@ -19,14 +19,15 @@ def get_feed(
     radius: float = Query(5.0),
     db: Session = Depends(get_db),
 ):
-    user_point = func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326)
-    venue_point = func.ST_SetSRID(func.ST_MakePoint(Venue.lng, Venue.lat), 4326)
-    distance = func.ST_DistanceSphere(venue_point, user_point) / 1000
+    distance_expr = func.ST_DistanceSphere(
+        func.ST_SetSRID(func.ST_MakePoint(Venue.lng, Venue.lat), 4326),
+        func.ST_SetSRID(func.ST_MakePoint(lng, lat), 4326),
+    )
 
     rows = (
-        db.query(Event, Venue.name.label("venue_name"), distance.label("distance"))
+        db.query(Event, Venue.name.label("venue_name"), (distance_expr / 1000).label("distance"))
         .join(Venue, Event.venue_id == Venue.id)
-        .filter(func.ST_DWithin(venue_point, user_point, radius * 1000))
+        .filter(distance_expr <= radius * 1000)
         .order_by(Event.start_time.asc())
         .all()
     )
